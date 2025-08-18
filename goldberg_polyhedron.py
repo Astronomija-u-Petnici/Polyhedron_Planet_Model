@@ -7,9 +7,59 @@ import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
-class GoldbergPolyhedron:
+class Cell:
+    """
+    Class representing a cell in the Goldberg Polyhedron.
+    """
 
-    def __init__(self, center=(0, 0, 0), order=2):
+    def __init__(self, vertices):
+        """
+        Initializes the Cell with given vertices.
+
+        Parameters
+        ----------
+        vertices : list of tuples
+            List of vertices defining the cell.
+        """
+        self.vertices = np.array(vertices)
+        self._fix_vertices()
+        self.center = np.mean(self.vertices, axis=0)
+        self.normal = np.cross(
+            self.vertices[1] - self.vertices[0], self.vertices[2] - self.vertices[0]
+        )
+        self.neighbors = []
+
+    def __repr__(self):
+        """
+        String representation of the Cell object.
+
+        Returns
+        -------
+        str
+            String representation of the Cell.
+        """
+        return f"Cell(center={self.center}, vertices={self.vertices})"
+
+    def _fix_vertices(self):
+        """
+        Adds missing or removes extra vertex to the hexagonal cell.
+
+        If there are 5 vertices, estimates the 6th vertex by averaging the two endpoints'
+        vectors from the center, normalizing to the same radius, and appending it to self.vertices.
+        If there are more than 6 vertices, truncates to 6.
+        """
+        if self.vertices.shape[0] > 6:
+            self.vertices = self.vertices[:6, :]
+        elif self.vertices.shape[0] == 5:
+            pass
+
+
+class GoldbergPolyhedron:
+    """
+    Class representing a Goldberg Polyhedron (Geodesic Sphere of Hex and Pentagons).
+    """
+
+    def __init__(self, center=(0, 0, 0), order=2, radius=1):
         """
         Initializes the GoldbergPolyhedron with a center and order.
 
@@ -20,18 +70,35 @@ class GoldbergPolyhedron:
         order : int
             Order of the Goldberg Polyhedron.
         """
+        self.cells = []
         self.center = np.array(center)
         self.order = order
-        self._create_goldberg_polyhedron(order)
+        self.radius = radius
+        self._create_goldberg_polyhedron(self.order, self.center, self.radius)
+
+    def __repr__(self):
+        """
+        String representation of the GoldbergPolyhedron object.
+
+        Returns
+        -------
+        str
+            String representation of the GoldbergPolyhedron.
+        """
+        return f"GoldbergPolyhedron(center={self.center}, order={self.order})"
 
     def draw_goldberg_polyhedron(self):
         """
         Plots a Goldberg Polyhedron (Geodesic Sphere of Hex and Pentagons)
         of given order n.
         """
-        self._create_goldberg_polyhedron(self.order, plot=True)
+        self._create_goldberg_polyhedron(
+            self.order, self.center, self.radius, plot=True, create_cells=False
+        )
 
-    def _create_goldberg_polyhedron(self, n, plot=False):
+    def _create_goldberg_polyhedron(
+        self, n, center=(0, 0, 0), radius=1, plot=False, create_cells=True
+    ):
         """
         Creates and optionally plots a Goldberg Polyhedron
         (Geodesic Sphere of Hex and Pentagons) of given order.
@@ -40,6 +107,8 @@ class GoldbergPolyhedron:
         ----------
         n : int
             Order of the Goldberg Polyhedron.
+        center : tuple, optional
+            Center of the polyhedron in 3D space (x, y, z). Default is (0, 0, 0).
         plot : bool, optional
             If True, the polyhedron will be plotted. Default is False.
         """
@@ -89,18 +158,22 @@ class GoldbergPolyhedron:
                         a = ico_triangs[k, 0]
                         b = ico_triangs[k, 1]
                         c = ico_triangs[k, 2]
-                        self._get_projected_face(hex_pts_hom, a, b, c, ax=ax, plot=plot)
+                        vertices = self._get_projected_face(
+                            hex_pts_hom, a, b, c, center=center, ax=ax, plot=plot
+                        ).T
+                        if create_cells:
+                            cell = Cell(vertices)
+                            self.cells.append(cell)
 
         if plot:
             ax.set_box_aspect([1, 1, 1])
             ax.set_xlabel("X")
             ax.set_ylabel("Y")
             ax.set_zlabel("Z")
-            plt.axis("off")
             plt.tight_layout()
             plt.show()
 
-    def _get_projected_face(self, hexagon, u, v, w, ax=None, plot=False):
+    def _get_projected_face(self, hexagon, u, v, w, center=(0, 0, 0), ax=None, plot=False):
         """
         Projects the input face (polygon) onto the unit sphere and optionally plots it.
 
@@ -111,6 +184,8 @@ class GoldbergPolyhedron:
             shape (3, n) or (4, n).
         u, v, w : int
             Indices (0-based) of the vectors defining the plane to be projected on the sphere.
+        center : tuple, optional
+            Center of the polyhedron in 3D space (x, y, z). Default is (0, 0, 0).
         ax : matplotlib 3d axis, optional
             If provided, plot on this axis.
         plot : bool, optional
@@ -141,7 +216,7 @@ class GoldbergPolyhedron:
 
         for idx in range(n):
             face[:, idx] = self._map_gridpoint_to_sphere(
-                hexagon[:, idx], ico_points[u], ico_points[v], ico_points[w]
+                hexagon[:, idx], ico_points[u], ico_points[v], ico_points[w], center=center
             )
 
         if plot:
@@ -168,7 +243,7 @@ class GoldbergPolyhedron:
             )
         return face
 
-    def _map_gridpoint_to_sphere(self, p, s1, s2, s3):
+    def _map_gridpoint_to_sphere(self, p, s1, s2, s3, center=(0, 0, 0)):
         """
         Projects the input planar coordinates onto the unit sphere.
 
@@ -192,7 +267,7 @@ class GoldbergPolyhedron:
             l2s = l2 / (l1 + l2)
             p12 = self._slerp(s1, s2, l2s)
             out = self._slerp(p12, s3, l3)
-        return out
+        return out + center
 
     def _hexagon(self, x, y, th, scale, hex_type):
         """
