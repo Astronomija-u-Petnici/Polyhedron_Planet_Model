@@ -4,8 +4,10 @@ Module for spherical linear interpolation (slerp) between two vectors.
 This module provides the slerp function, which returns the uniform interpolation
 of the arc defined by two vectors around the origin.
 """
-from scal_prod import scal_prod
+
 import numpy as np
+
+from scal_prod import scal_prod
 
 
 def slerp(p0, p1, t):

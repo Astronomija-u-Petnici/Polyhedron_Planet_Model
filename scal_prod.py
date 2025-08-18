@@ -4,6 +4,7 @@ Module for computing the scalar (dot) product of two 4D vectors.
 This module provides the scal_prod function, which returns the scalar product
 of two vectors of the form [x, y, z, 1].
 """
+
 import numpy as np
 
 

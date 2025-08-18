@@ -5,10 +5,11 @@ of a given order n.
 This script generates the Goldberg polyhedron and plots it in 3D using matplotlib.
 """
 
-import numpy as np
-from hexagon import hexagon
-from face_plot import get_projected_face_plot
 import matplotlib.pyplot as plt
+import numpy as np
+
+from face_plot import get_projected_face_plot
+from hexagon import hexagon
 
 
 def draw_goldberg_polyhedron(n):
@@ -31,18 +32,20 @@ def draw_goldberg_polyhedron(n):
     i = np.arange(5)
 
     # Construct icosahedron triangle indices (1-based in MATLAB, 0-based in Python)
-    ico_triangs = np.vstack([
-        np.column_stack([np.zeros(5), i + 1, (np.mod(i + 1, 5) + 1)]),
-        np.column_stack([np.full(5, 6), i + 7, (np.mod(i + 1, 5) + 7)]),
-        np.column_stack([i + 1, (np.mod(i + 1, 5) + 1), (np.mod(7 - i, 5) + 7)]),
-        np.column_stack([i + 1, (np.mod(7 - i, 5) + 7), (np.mod(8 - i, 5) + 7)])
-    ]).astype(int)
+    ico_triangs = np.vstack(
+        [
+            np.column_stack([np.zeros(5), i + 1, (np.mod(i + 1, 5) + 1)]),
+            np.column_stack([np.full(5, 6), i + 7, (np.mod(i + 1, 5) + 7)]),
+            np.column_stack([i + 1, (np.mod(i + 1, 5) + 1), (np.mod(7 - i, 5) + 7)]),
+            np.column_stack([i + 1, (np.mod(7 - i, 5) + 7), (np.mod(8 - i, 5) + 7)]),
+        ]
+    ).astype(int)
     # Adjust for Python's 0-based indexing
 
     scale = 1 / (n * np.sqrt(3))
 
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
 
     for i in range(n + 1):
         for j in range(n - i + 1):
@@ -59,7 +62,7 @@ def draw_goldberg_polyhedron(n):
                 hex_type = 1
                 th = 0
 
-            if ((i != 0 or j != 0) and (i != 0 or j != n) and (i != n or j != 0)):
+            if (i != 0 or j != 0) and (i != 0 or j != n) and (i != n or j != 0):
                 hx = x + i * 1 / n + j * 1 / (2 * n)
                 hy = y + j * (np.sqrt(3)) / (2 * n)
                 hex_pts = hexagon(hx, hy, th, scale, hex_type)
@@ -71,9 +74,9 @@ def draw_goldberg_polyhedron(n):
                     get_projected_face_plot(hex_pts_hom, a, b, c, ax=ax)
 
     ax.set_box_aspect([1, 1, 1])
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    plt.axis('off')
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    plt.axis("off")
     plt.tight_layout()
     plt.show()

@@ -28,7 +28,7 @@ def barycentric_coords(p):
     """
     x = p[0]
     y = p[1]
-    l3 = y * 2 / (3 ** 0.5)
+    l3 = y * 2 / (3**0.5)
     l2 = x + 0.5 * (1 - l3)
     l1 = 1 - l2 - l3
     return l1, l2, l3

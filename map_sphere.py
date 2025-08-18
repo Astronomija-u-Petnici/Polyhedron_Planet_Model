@@ -5,9 +5,11 @@ This module provides the map_gidpoint_to_sphere function, which projects
 planar coordinates onto the unit sphere using barycentric coordinates and
 spherical linear interpolation.
 """
+
+import numpy as np
+
 from coords import barycentric_coords
 from slerp import slerp
-import numpy as np
 
 
 def map_gidpoint_to_sphere(p, s1, s2, s3):

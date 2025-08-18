@@ -5,10 +5,12 @@ This module provides the get_projected_face_plot function, which outputs and plo
 the coordinates of a projected face on the plane defined by tips of the vectors u, v, and w
 on the unit sphere.
 """
-import numpy as np
-from map_sphere import map_gidpoint_to_sphere
+
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+from map_sphere import map_gidpoint_to_sphere
 
 
 def get_projected_face_plot(hexagon, u, v, w, ax=None):
@@ -34,12 +36,9 @@ def get_projected_face_plot(hexagon, u, v, w, ax=None):
     s = 2 / np.sqrt(5)
     c = 1 / np.sqrt(5)
     i = np.arange(5)
-    top_points = np.vstack([
-        np.zeros(5),
-        s * np.cos(i * 2 * np.pi / 5),
-        s * np.sin(i * 2 * np.pi / 5),
-        c * np.ones(5)
-    ]).T
+    top_points = np.vstack(
+        [np.zeros(5), s * np.cos(i * 2 * np.pi / 5), s * np.sin(i * 2 * np.pi / 5), c * np.ones(5)]
+    ).T
     top_points = np.vstack([[0, 0, 1], top_points[:, 1:]])
     bottom_points = np.column_stack([-top_points[:, 0], top_points[:, 1], -top_points[:, 2]])
     ico_points = np.vstack([top_points, bottom_points])
@@ -49,31 +48,30 @@ def get_projected_face_plot(hexagon, u, v, w, ax=None):
 
     for idx in range(n):
         face[:, idx] = map_gidpoint_to_sphere(
-            hexagon[:, idx],
-            ico_points[u],
-            ico_points[v],
-            ico_points[w]
+            hexagon[:, idx], ico_points[u], ico_points[v], ico_points[w]
         )
 
     # Plotting
     if ax is None:
         fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
     verts = [face.T]
-    color = np.random.rand(3,)
-    poly = Poly3DCollection(verts, alpha=0.3, facecolor=color, edgecolor='none')
+    color = np.random.rand(
+        3,
+    )
+    poly = Poly3DCollection(verts, alpha=0.3, facecolor=color, edgecolor="none")
     ax.add_collection3d(poly)
     ax.plot(
         face[0, :],
         face[1, :],
         face[2, :],
-        '-',
+        "-",
         linewidth=2,
-        color='k',
-        marker='o',
-        markerfacecolor='r',
-        markeredgecolor='r',
-        markersize=4
+        color="k",
+        marker="o",
+        markerfacecolor="r",
+        markeredgecolor="r",
+        markersize=4,
     )
 
     return face
