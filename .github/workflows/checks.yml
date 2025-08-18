@@ -2,7 +2,7 @@ name: Checks
 
 on:
   pull_request:
-    branches: [master]  # Runs on pull requests targeting the main branch
+    branches: [master, python/develop]  # Runs on pull requests targeting the main branch
 
 jobs:
   checks:
