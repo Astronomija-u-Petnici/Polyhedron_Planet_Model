@@ -12,7 +12,7 @@ class Cell:
     Class representing a cell in the Goldberg Polyhedron.
     """
 
-    def __init__(self, vertices):
+    def __init__(self, vertices, cell_type=None):
         """
         Initializes the Cell with given vertices.
 
@@ -21,13 +21,15 @@ class Cell:
         vertices : list of tuples
             List of vertices defining the cell.
         """
+        self.cell_type = cell_type if cell_type is not None else None
         self.vertices = np.array(vertices)
-        self._fix_vertices()
+        self._round_vertices()
+        self._remove_extra_vertices()
         self.center = np.mean(self.vertices, axis=0)
         self.normal = np.cross(
             self.vertices[1] - self.vertices[0], self.vertices[2] - self.vertices[0]
         )
-        self.neighbors = []
+        self.neighbors = set()
 
     def __repr__(self):
         """
@@ -38,20 +40,37 @@ class Cell:
         str
             String representation of the Cell.
         """
-        return f"Cell(center={self.center}, vertices={self.vertices})"
+        return f"Cell(type={self.cell_type}, vertices={self.vertices})"
 
-    def _fix_vertices(self):
+    def set_cell_type(self, cell_type):
         """
-        Adds missing or removes extra vertex to the hexagonal cell.
+        Sets the type of the cell.
 
-        If there are 5 vertices, estimates the 6th vertex by averaging the two endpoints'
-        vectors from the center, normalizing to the same radius, and appending it to self.vertices.
-        If there are more than 6 vertices, truncates to 6.
+        Parameters
+        ----------
+        cell_type : str
+            Type of the cell (e.g., 'hexagon', 'pentagon', 'half_hexagon').
+        """
+        self.cell_type = cell_type
+
+    def find_center(self):
+        """
+        Finds the center of the cell based on its vertices.
+        """
+        self.center = np.mean(self.vertices, axis=0)
+
+    def _remove_extra_vertices(self):
+        """
+        Removes extra verices of the hexagonal cell.
         """
         if self.vertices.shape[0] > 6:
             self.vertices = self.vertices[:6, :]
-        elif self.vertices.shape[0] == 5:
-            pass
+
+    def _round_vertices(self):
+        """
+        Rounds the vertices to 4 decimal places.
+        """
+        self.vertices = np.round(self.vertices, 4)
 
 
 class GoldbergPolyhedron:
@@ -95,6 +114,41 @@ class GoldbergPolyhedron:
         self._create_goldberg_polyhedron(
             self.order, self.center, self.radius, plot=True, create_cells=False
         )
+
+    def plot(self):
+        """
+        Plots the Goldberg Polyhedron using matplotlib.
+        """
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111, projection="3d")
+
+        all_verts = np.concatenate([np.array(cell.vertices) for cell in self.cells])
+        max_range = (all_verts.max(axis=0) - all_verts.min(axis=0)).max() / 2.0
+        mid_x = (all_verts[:, 0].max() + all_verts[:, 0].min()) * 0.5
+        mid_y = (all_verts[:, 1].max() + all_verts[:, 1].min()) * 0.5
+        mid_z = (all_verts[:, 2].max() + all_verts[:, 2].min()) * 0.5
+
+        for cell in self.cells:
+            verts = np.array(cell.vertices)
+            if not np.allclose(verts[0], verts[-1]):
+                verts = np.vstack([verts, verts[0]])
+            poly = Poly3DCollection([verts], alpha=0.6)
+            poly.set_facecolor(
+                np.random.rand(
+                    3,
+                )
+            )
+            poly.set_edgecolor("k")
+            ax.add_collection3d(poly)
+
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        plt.tight_layout()
+        plt.show()
 
     def _create_goldberg_polyhedron(
         self, n, center=(0, 0, 0), radius=1, plot=False, create_cells=True
@@ -159,11 +213,17 @@ class GoldbergPolyhedron:
                         b = ico_triangs[k, 1]
                         c = ico_triangs[k, 2]
                         vertices = self._get_projected_face(
-                            hex_pts_hom, a, b, c, center=center, ax=ax, plot=plot
+                            hex_pts_hom, a, b, c, center=center, radius=radius, ax=ax, plot=plot
                         ).T
                         if create_cells:
-                            cell = Cell(vertices)
+                            cell_type = "hexagon" if hex_type == 1 else "half_hexagon"
+                            cell = Cell(vertices, cell_type=cell_type)
                             self.cells.append(cell)
+
+        if create_cells:
+            self._fix_cells()
+            self._add_pentagons()
+            self._find_neighbors()
 
         if plot:
             ax.set_box_aspect([1, 1, 1])
@@ -173,7 +233,9 @@ class GoldbergPolyhedron:
             plt.tight_layout()
             plt.show()
 
-    def _get_projected_face(self, hexagon, u, v, w, center=(0, 0, 0), ax=None, plot=False):
+    def _get_projected_face(
+        self, hexagon, u, v, w, center=(0, 0, 0), radius=1, ax=None, plot=False
+    ):
         """
         Projects the input face (polygon) onto the unit sphere and optionally plots it.
 
@@ -218,6 +280,8 @@ class GoldbergPolyhedron:
             face[:, idx] = self._map_gridpoint_to_sphere(
                 hexagon[:, idx], ico_points[u], ico_points[v], ico_points[w], center=center
             )
+
+        face = face * radius
 
         if plot:
             if ax is None:
@@ -377,3 +441,115 @@ class GoldbergPolyhedron:
         p1 = np.asarray(p1)
         p2 = np.asarray(p2)
         return np.sum(p1 * p2)
+
+    def _fix_cells(self):
+        """
+        Fixes cells by merging half hexagonal cells to restore missing vertices.
+        """
+        cells_to_remove = set()
+        for cell in self.cells:
+            # Only process half hexagonal cells
+            if cell.cell_type == "half_hexagon":
+                found = False
+                for candidate_cell in self.cells:
+                    if candidate_cell is cell or not candidate_cell.cell_type == "half_hexagon":
+                        continue
+                    # Check if candidates shares two vertices (first and last)
+                    shared = 0
+                    for v in [cell.vertices[0], cell.vertices[4]]:
+                        if np.any(
+                            np.all(np.isclose(candidate_cell.vertices, v, atol=1e-4), axis=1)
+                        ):
+                            shared += 1
+                    if shared == 2:
+                        # Add missing vertex/vertices from candidate to cell
+                        for vertex in candidate_cell.vertices:
+                            if not np.any(
+                                np.all(np.isclose(cell.vertices, vertex, atol=1e-4), axis=1)
+                            ):
+                                cell.vertices = np.vstack((cell.vertices, vertex))
+                        # Remove the two shared vertices (first and last) to keep only unique ones
+                        mask = [
+                            not (
+                                np.all(np.isclose(v, cell.vertices[0], atol=1e-4))
+                                or np.all(np.isclose(v, cell.vertices[4], atol=1e-4))
+                            )
+                            for v in cell.vertices
+                        ]
+                        cell.vertices = cell.vertices[mask]
+                        # Mark candidate for removal
+                        cells_to_remove.add(candidate_cell)
+                        found = True
+                        break
+                if found:
+                    # After merging, ensure no duplicate vertices
+                    _, idx = np.unique(np.round(cell.vertices, 4), axis=0, return_index=True)
+                    cell.vertices = cell.vertices[np.sort(idx)]
+                    cell.set_cell_type("hexagon")
+            # Arrange vertices and update center for all cells
+            cell.find_center()
+        # Remove merged cells after iteration to avoid modifying list during loop
+        self.cells = [cell for cell in self.cells if cell not in cells_to_remove]
+
+    def _add_pentagons(self):
+        """
+        Find the missing pentagons and add them to the polyhedron.
+        """
+
+        # Count how many times each vertex appears
+        vertices_count = {}
+        for cell in self.cells:
+            for vertex in cell.vertices:
+                key = tuple(np.round(vertex, 8))
+                if key in vertices_count:
+                    vertices_count[key] += 1
+                else:
+                    vertices_count[key] = 1
+
+        # Only keep vertices that appear in exactly 2 cells
+        vertex_keys = [k for k, v in vertices_count.items() if v == 2]
+        vertices_left = [np.array(k) for k in vertex_keys]
+
+        while len(vertices_left) >= 5:
+            pentagon = []
+            used_indices = set()
+            # 1. Pick a vertex
+            current_idx = 0
+            current_vertex = vertices_left[current_idx]
+            pentagon.append(current_vertex)
+            used_indices.add(current_idx)
+
+            # 2-4. Find the next closest vertex not already used, repeat until 5
+            for _ in range(4):
+                min_dist = float("inf")
+                min_idx = -1
+                for idx, v in enumerate(vertices_left):
+                    if idx in used_indices:
+                        continue
+                    dist = np.linalg.norm(current_vertex - v)
+                    if dist < min_dist:
+                        min_dist = dist
+                        min_idx = idx
+                current_vertex = vertices_left[min_idx]
+                pentagon.append(current_vertex)
+                used_indices.add(min_idx)
+
+            # 5. Create the pentagon cell
+            self.cells.append(Cell(pentagon, "pentagon"))
+
+            # 6. Remove those vertices from vertices_left
+            vertices_left = [v for idx, v in enumerate(vertices_left) if idx not in used_indices]
+
+    def _find_neighbors(self):
+        """
+        Finds neighbors for each cell in the Goldberg Polyhedron.
+        """
+        for cell in self.cells:
+            for vertex in cell.vertices:
+                for candidate_cell in self.cells:
+                    if candidate_cell is cell:
+                        continue
+                    if np.any(
+                        np.all(np.isclose(candidate_cell.vertices, vertex, atol=1e-4), axis=1)
+                    ):
+                        cell.neighbors.add(candidate_cell)
