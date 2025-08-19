@@ -24,6 +24,20 @@ class Surface(Cell):
         super().__init__(vertices, cell_type)
         self.temperature = temperature
 
+    def __repr__(self):
+        """
+        Return a string representation of the surface.
+        """
+        return f"Surface(vertices={self.vertices}, cell_type={self.cell_type}, \
+            temperature={self.temperature})"
+
+    @classmethod
+    def cell_to_surface(cls, parent):
+        """
+        Convert a Cell objest to a Surface object.
+        """
+        return cls(parent.vertices, parent.cell_type)
+
     def update_temperature(self):
         """
         Update the temperature of the surface.
@@ -46,6 +60,13 @@ class Planet(GoldbergPolyhedron):
         - radius: Radius of the planet.
         """
         super().__init__(center=center, order=order, radius=radius)
+        self.surfaces = [Surface.cell_to_surface(cell) for cell in self.surfaces]
+
+    def __repr__(self):
+        """
+        Return a string representation of the planet.
+        """
+        return f"Planet(center={self.center}, order={self.order}, radius={self.radius})"
 
     @property
     def surfaces(self):
