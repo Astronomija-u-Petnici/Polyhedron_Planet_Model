@@ -2,8 +2,13 @@
 
 This program makes Goldbergs Polyhedron (Geodesic Sphere of Hex and Pentagons) of given order n.
 
-Class Cell represents the hexagon or pentagon cell of the polyhedron.
-Class GoldbergPolyhedron creates the polyhedron out of Cell objects.
+### `Cell` class
+
+Represents a cell (face) in the Goldberg Polyhedron, which can be a hexagon, pentagon, or half-hexagon. Each `Cell` stores its vertices, type, center, normal vector, and a set of neighboring cells. The class provides methods for rounding and cleaning up vertices, updating the cell type, and finding the geometric center.
+
+### `GoldbergPolyhedron` class
+
+Constructs and manages a Goldberg Polyhedron (a geodesic sphere composed of hexagons and pentagons). This class generates the polyhedron's geometry, creates and manages its `Cell` objects, and provides methods for plotting, fixing cell structures, adding missing pentagons, and finding cell neighbors. The polyhedron is defined by its center, order, and radius.
 
 ![Example Output](/goldberg_polyhedron_example.PNG)
 
@@ -11,7 +16,7 @@ Class GoldbergPolyhedron creates the polyhedron out of Cell objects.
 
 The `planet.py` module provides classes for modeling a planet using Goldberg polyhedra.
 
-### Surface Class
+### `Surface` Class
 
 - **Purpose:** Represents a surface patch (cell) on the planet, based on a Goldberg polyhedron cell.
 - **Key attributes:**
@@ -19,10 +24,11 @@ The `planet.py` module provides classes for modeling a planet using Goldberg pol
   - `cell_type`: Type of the cell (e.g., 'hexagon', 'pentagon').
   - `temperature`: Temperature value for the surface patch.
   - `normal`: Normal vector of the surface
-  - `center`: center coordinates of the surface
+  - `center`: Center coordinates of the surface
+  - `neighbors`: List of neighbor surfaces
 - **Usage:** Used to store additional properties (like temperature) for each cell.
 
-### Planet Class
+### `Planet` Class
 
 - **Purpose:** Represents a planet as a collection of `Surface` objects, inheriting from `GoldbergPolyhedron`.
 - **Key attributes:**
