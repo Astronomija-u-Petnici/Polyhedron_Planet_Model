@@ -12,7 +12,7 @@ class Surface(Cell):
     A class representing a surface of a planet using a cell on a Goldberg polyhedra.
     """
 
-    def __init__(self, vertices, cell_type=None, temperature=0):
+    def __init__(self, vertices, cell_type=None, neighbors=None, temperature=0):
         """
         Initialize the surface with vertices, cell type, and temperature.
 
@@ -21,7 +21,7 @@ class Surface(Cell):
         - cell_type: Type of the cell (e.g., 'hexagon', 'pentagon').
         - temperature: Temperature of the surface.
         """
-        super().__init__(vertices, cell_type)
+        super().__init__(vertices, cell_type, neighbors)
         self.temperature = temperature
 
     def __repr__(self):
@@ -36,7 +36,7 @@ class Surface(Cell):
         """
         Convert a Cell objest to a Surface object.
         """
-        return cls(parent.vertices, parent.cell_type)
+        return cls(parent.vertices, parent.cell_type, parent.neighbors)
 
     def update_temperature(self):
         """
