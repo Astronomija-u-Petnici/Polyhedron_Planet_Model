@@ -16,7 +16,7 @@ Constructs and manages a Goldberg Polyhedron (a geodesic sphere composed of hexa
 
 The `planet.py` module provides classes for modeling a planet using Goldberg polyhedra.
 
-### Surface Class
+### `Surface` Class
 
 - **Purpose:** Represents a surface patch (cell) on the planet, based on a Goldberg polyhedron cell.
 - **Key attributes:**
@@ -28,7 +28,7 @@ The `planet.py` module provides classes for modeling a planet using Goldberg pol
   - `neighbors`: List of neighbor surfaces
 - **Usage:** Used to store additional properties (like temperature) for each cell.
 
-### Planet Class
+### `Planet` Class
 
 - **Purpose:** Represents a planet as a collection of `Surface` objects, inheriting from `GoldbergPolyhedron`.
 - **Key attributes:**
