@@ -12,7 +12,7 @@ class Cell:
     Class representing a cell in the Goldberg Polyhedron.
     """
 
-    def __init__(self, vertices, cell_type=None):
+    def __init__(self, vertices, cell_type=None, neighbors=None):
         """
         Initializes the Cell with given vertices.
 
@@ -29,7 +29,7 @@ class Cell:
         self.normal = np.cross(
             self.vertices[1] - self.vertices[0], self.vertices[2] - self.vertices[0]
         )
-        self.neighbors = set()
+        self.neighbors = neighbors if neighbors is not None else set()
 
     def __repr__(self):
         """
@@ -446,110 +446,118 @@ class GoldbergPolyhedron:
         """
         Fixes cells by merging half hexagonal cells to restore missing vertices.
         """
+        # Build a mapping from rounded vertex to half-hexagon cells containing it
+        vertex_to_halfhex = {}
+        for cell in self.cells:
+            if cell.cell_type == "half_hexagon":
+                for vertex in [cell.vertices[0], cell.vertices[4]]:
+                    key = tuple(np.round(vertex, 4))
+                    if key not in vertex_to_halfhex:
+                        vertex_to_halfhex[key] = set()
+                    vertex_to_halfhex[key].add(cell)
+
         cells_to_remove = set()
         for cell in self.cells:
-            # Only process half hexagonal cells
-            if cell.cell_type == "half_hexagon":
-                found = False
-                for candidate_cell in self.cells:
-                    if candidate_cell is cell or not candidate_cell.cell_type == "half_hexagon":
-                        continue
-                    # Check if candidates shares two vertices (first and last)
-                    shared = 0
-                    for v in [cell.vertices[0], cell.vertices[4]]:
-                        if np.any(
-                            np.all(np.isclose(candidate_cell.vertices, v, atol=1e-4), axis=1)
-                        ):
-                            shared += 1
-                    if shared == 2:
-                        # Add missing vertex/vertices from candidate to cell
-                        for vertex in candidate_cell.vertices:
-                            if not np.any(
-                                np.all(np.isclose(cell.vertices, vertex, atol=1e-4), axis=1)
-                            ):
-                                cell.vertices = np.vstack((cell.vertices, vertex))
-                        # Remove the two shared vertices (first and last) to keep only unique ones
-                        mask = [
-                            not (
-                                np.all(np.isclose(v, cell.vertices[0], atol=1e-4))
-                                or np.all(np.isclose(v, cell.vertices[4], atol=1e-4))
-                            )
-                            for v in cell.vertices
-                        ]
-                        cell.vertices = cell.vertices[mask]
-                        # Mark candidate for removal
-                        cells_to_remove.add(candidate_cell)
-                        found = True
-                        break
-                if found:
-                    # After merging, ensure no duplicate vertices
-                    _, idx = np.unique(np.round(cell.vertices, 4), axis=0, return_index=True)
-                    cell.vertices = cell.vertices[np.sort(idx)]
-                    cell.set_cell_type("hexagon")
-            # Arrange vertices and update center for all cells
+            if cell.cell_type != "half_hexagon" or cell in cells_to_remove:
+                continue
+            # Find candidates sharing both first and last vertex
+            shared_cells = vertex_to_halfhex.get(
+                tuple(np.round(cell.vertices[0], 4)), set()
+            ) & vertex_to_halfhex.get(tuple(np.round(cell.vertices[4], 4)), set())
+            shared_cells = [
+                c
+                for c in shared_cells
+                if c is not cell and c.cell_type == "half_hexagon" and c not in cells_to_remove
+            ]
+            if shared_cells:
+                candidate_cell = shared_cells[0]
+                # Merge unique vertices from candidate into cell
+                for vertex in candidate_cell.vertices:
+                    if not np.any(np.all(np.isclose(cell.vertices, vertex, atol=1e-4), axis=1)):
+                        cell.vertices = np.vstack((cell.vertices, vertex))
+                # Remove the two shared vertices (first and last) to keep only unique ones
+                mask = [
+                    not (
+                        np.all(np.isclose(v, cell.vertices[0], atol=1e-4))
+                        or np.all(np.isclose(v, cell.vertices[4], atol=1e-4))
+                    )
+                    for v in cell.vertices
+                ]
+                cell.vertices = cell.vertices[mask]
+                # Remove duplicates
+                _, idx = np.unique(np.round(cell.vertices, 4), axis=0, return_index=True)
+                cell.vertices = cell.vertices[np.sort(idx)]
+                cell.set_cell_type("hexagon")
+                cells_to_remove.add(candidate_cell)
             cell.find_center()
-        # Remove merged cells after iteration to avoid modifying list during loop
+        # Remove merged cells after iteration
         self.cells = [cell for cell in self.cells if cell not in cells_to_remove]
 
     def _add_pentagons(self):
         """
         Find the missing pentagons and add them to the polyhedron.
         """
-
-        # Count how many times each vertex appears
+        # Count how many times each vertex appears (rounded for stability)
         vertices_count = {}
         for cell in self.cells:
             for vertex in cell.vertices:
                 key = tuple(np.round(vertex, 8))
-                if key in vertices_count:
-                    vertices_count[key] += 1
-                else:
-                    vertices_count[key] = 1
+                vertices_count[key] = vertices_count.get(key, 0) + 1
 
         # Only keep vertices that appear in exactly 2 cells
-        vertex_keys = [k for k, v in vertices_count.items() if v == 2]
-        vertices_left = [np.array(k) for k in vertex_keys]
+        pentagon_vertices = [np.array(k) for k, v in vertices_count.items() if v == 2]
+        used = set()
 
-        while len(vertices_left) >= 5:
-            pentagon = []
-            used_indices = set()
-            # 1. Pick a vertex
-            current_idx = 0
-            current_vertex = vertices_left[current_idx]
-            pentagon.append(current_vertex)
-            used_indices.add(current_idx)
+        # Build a spatial hash for fast nearest neighbor lookup
+        vertex_hash = {tuple(np.round(v, 8)): v for v in pentagon_vertices}
 
-            # 2-4. Find the next closest vertex not already used, repeat until 5
+        def find_closest(v, exclude):
+            min_dist = float("inf")
+            min_key = None
+            for key, candidate in vertex_hash.items():
+                if key in exclude:
+                    continue
+                dist = np.linalg.norm(v - candidate)
+                if dist < min_dist:
+                    min_dist = dist
+                    min_key = key
+            return min_key
+
+        # Greedily group pentagon vertices by proximity
+        while len(used) < len(pentagon_vertices):
+            # Find the first unused vertex
+            start_key = next(key for key in vertex_hash if key not in used)
+            pentagon = [vertex_hash[start_key]]
+            used_in_this = {start_key}
+            current_key = start_key
             for _ in range(4):
-                min_dist = float("inf")
-                min_idx = -1
-                for idx, v in enumerate(vertices_left):
-                    if idx in used_indices:
-                        continue
-                    dist = np.linalg.norm(current_vertex - v)
-                    if dist < min_dist:
-                        min_dist = dist
-                        min_idx = idx
-                current_vertex = vertices_left[min_idx]
-                pentagon.append(current_vertex)
-                used_indices.add(min_idx)
-
-            # 5. Create the pentagon cell
-            self.cells.append(Cell(pentagon, "pentagon"))
-
-            # 6. Remove those vertices from vertices_left
-            vertices_left = [v for idx, v in enumerate(vertices_left) if idx not in used_indices]
+                next_key = find_closest(vertex_hash[current_key], used | used_in_this)
+                if next_key is None:
+                    break
+                pentagon.append(vertex_hash[next_key])
+                used_in_this.add(next_key)
+                current_key = next_key
+            if len(pentagon) == 5:
+                self.cells.append(Cell(pentagon, "pentagon"))
+            used.update(used_in_this)
 
     def _find_neighbors(self):
         """
         Finds neighbors for each cell in the Goldberg Polyhedron.
         """
+        vertex_to_cells = {}
         for cell in self.cells:
             for vertex in cell.vertices:
-                for candidate_cell in self.cells:
-                    if candidate_cell is cell:
-                        continue
-                    if np.any(
-                        np.all(np.isclose(candidate_cell.vertices, vertex, atol=1e-4), axis=1)
-                    ):
-                        cell.neighbors.add(candidate_cell)
+                key = tuple(np.round(vertex, 4))
+                if key not in vertex_to_cells:
+                    vertex_to_cells[key] = set()
+                vertex_to_cells[key].add(cell)
+            cell.neighbors.clear()
+
+        for cell in self.cells:
+            neighbor_cells = set()
+            for vertex in cell.vertices:
+                key = tuple(np.round(vertex, 4))
+                neighbor_cells.update(vertex_to_cells[key])
+            neighbor_cells.discard(cell)
+            cell.neighbors = neighbor_cells
